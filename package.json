@@ -2,7 +2,13 @@
   "name": "unreal-helper",
   "displayName": "Unreal Helper",
   "description": "A simple Unreal Engine helper sidebar for building and opening .uproject files.",
-  "version": "0.0.1",
+  "publisher": "ape1121",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ape1121/vscode-unreal-uproject-helper"
+  },
+  "license": "MIT",
+  "version": "1.0.0",
   "engines": {
     "vscode": "^1.103.0"
   },
@@ -16,7 +22,8 @@
     "onCommand:unrealHelper.openEditor",
     "onCommand:unrealHelper.buildAndOpen",
     "onCommand:unrealHelper.pickUproject",
-    "onCommand:unrealHelper.pickBuildScript"
+    "onCommand:unrealHelper.pickBuildScript",
+    "onCommand:unrealHelper.openSettings"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -24,12 +31,20 @@
       {
         "command": "unrealHelper.build",
         "title": "Build",
-        "category": "Unreal Helper"
+        "category": "Unreal Helper",
+        "icon": {
+          "light": "media/light/build.svg",
+          "dark": "media/dark/build.svg"
+        }
       },
       {
         "command": "unrealHelper.openEditor",
         "title": "Open Editor",
-        "category": "Unreal Helper"
+        "category": "Unreal Helper",
+        "icon": {
+          "light": "media/light/open-editor.svg",
+          "dark": "media/dark/open-editor.svg"
+        }
       },
       {
         "command": "unrealHelper.buildAndOpen",
@@ -45,6 +60,15 @@
         "command": "unrealHelper.pickBuildScript",
         "title": "Pick Build Script",
         "category": "Unreal Helper"
+      },
+      {
+        "command": "unrealHelper.openSettings",
+        "title": "Open Unreal Helper Settings",
+        "category": "Unreal Helper",
+        "icon": {
+          "light": "media/light/settings.svg",
+          "dark": "media/dark/settings.svg"
+        }
       }
     ],
     "configuration": {
@@ -91,6 +115,27 @@
           "name": "Unreal Helper",
           "type": "webview",
           "when": "unrealHelper.enabled"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "unrealHelper.openSettings",
+          "when": "view == unrealHelper.sidebar",
+          "group": "navigation@99"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "unrealHelper.build",
+          "when": "resourceExtname == .uproject",
+          "group": "navigation@1"
+        },
+        {
+          "command": "unrealHelper.openEditor",
+          "when": "resourceExtname == .uproject",
+          "group": "navigation@2"
         }
       ]
     }

@@ -7,11 +7,13 @@ import {
 	updateConfigurationValue,
 } from './config';
 import { CommandRunner } from './commandRunner';
+import { ProjectParser } from './projectParser';
 import { ProjectLocator } from './projectLocator';
 import {
 	SidebarStatusKind,
 	SidebarViewProvider,
 } from './sidebarViewProvider';
+import type { ParsedProjectSummary, ModuleSummary, TargetSummary } from './projectParser';
 
 interface BuildScriptState {
 	path?: string;
@@ -21,6 +23,7 @@ interface BuildScriptState {
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
 	const outputChannel = vscode.window.createOutputChannel('Unreal Helper');
 	const projectLocator = new ProjectLocator();
+	const projectParser = new ProjectParser();
 	const commandRunner = new CommandRunner(outputChannel);
 	const sidebarViewProvider = new SidebarViewProvider(context.extensionUri, {
 		build: () => void vscode.commands.executeCommand('unrealHelper.build'),
@@ -92,6 +95,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		const projectState = await projectLocator.getProjectState();
 		const buildScriptState = await getBuildScriptState();
 		const config = getExtensionConfig();
+		const parsedProject = await projectParser.parse(projectState.selectedPath);
 
 		await vscode.commands.executeCommand(
 			'setContext',
@@ -108,7 +112,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 			canBuild: true,
 			canOpenEditor: projectState.workspaceHasProjects || Boolean(projectState.selectedPath),
 			lastStatus: lastStatus,
+			moduleSummaryLines: toModuleSummaryLines(parsedProject),
 			openAfterBuild: config.openAfterBuild,
+			projectSummaryLines: toProjectSummaryLines(parsedProject),
+			targetSummaryLines: toTargetSummaryLines(parsedProject),
 			uprojectMessage: projectState.selectedPath
 				? projectState.selectedPath
 				: projectState.message,
@@ -157,20 +164,30 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		return workspaceFolder?.uri.fsPath ?? path.dirname(scriptPath);
 	};
 
-	const runBuild = async (): Promise<boolean> => {
+	const resolveCommandUprojectPath = async (
+		targetUri?: vscode.Uri,
+	): Promise<string | undefined> => {
+		if (targetUri?.scheme === 'file' && targetUri.fsPath.toLowerCase().endsWith('.uproject')) {
+			return projectLocator.setSelectedUproject(targetUri.fsPath);
+		}
+
+		return projectLocator.ensureUprojectPath();
+	};
+
+	const runBuild = async (targetUri?: vscode.Uri): Promise<boolean> => {
 		const buildScriptPath = await ensureBuildScriptPath();
 		if (!buildScriptPath) {
 			setStatus('error', 'Build script is not configured.', true);
 			return false;
 		}
 
-		const projectState = await projectLocator.getProjectState();
+		const uprojectPath = await resolveCommandUprojectPath(targetUri);
 		setStatus('info', 'Build started.');
 		await refreshSidebar();
 
 		const result = await commandRunner.run({
 			args: getExtensionConfig().buildArgs,
-			cwd: getBuildCwd(buildScriptPath, projectState.selectedPath),
+			cwd: getBuildCwd(buildScriptPath, uprojectPath),
 			label: 'Build',
 			scriptPath: buildScriptPath,
 		});
@@ -188,8 +205,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		return true;
 	};
 
-	const openSelectedProject = async (): Promise<boolean> => {
-		const uprojectPath = await projectLocator.ensureUprojectPath();
+	const openSelectedProject = async (targetUri?: vscode.Uri): Promise<boolean> => {
+		const uprojectPath = await resolveCommandUprojectPath(targetUri);
 		if (!uprojectPath) {
 			setStatus('error', 'No .uproject selected.', true);
 			return false;
@@ -207,40 +224,40 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 	const registerCommand = (
 		command: string,
-		callback: () => Promise<void>,
+		callback: (targetUri?: vscode.Uri) => Promise<void>,
 	): void => {
 		context.subscriptions.push(vscode.commands.registerCommand(command, callback));
 	};
 
-	registerCommand('unrealHelper.build', async () => {
+	registerCommand('unrealHelper.build', async (targetUri?: vscode.Uri) => {
 		try {
-			await runBuild();
+			await runBuild(targetUri);
 		} finally {
 			await refreshSidebar();
 		}
 	});
 
-	registerCommand('unrealHelper.buildAndOpen', async () => {
+	registerCommand('unrealHelper.buildAndOpen', async (targetUri?: vscode.Uri) => {
 		try {
-			const built = await runBuild();
+			const built = await runBuild(targetUri);
 			if (!built) {
 				return;
 			}
 
-			await openSelectedProject();
+			await openSelectedProject(targetUri);
 		} finally {
 			await refreshSidebar();
 		}
 	});
 
-	registerCommand('unrealHelper.openEditor', async () => {
+	registerCommand('unrealHelper.openEditor', async (targetUri?: vscode.Uri) => {
 		try {
 			if (getExtensionConfig().openAfterBuild) {
-				await vscode.commands.executeCommand('unrealHelper.buildAndOpen');
+				await vscode.commands.executeCommand('unrealHelper.buildAndOpen', targetUri);
 				return;
 			}
 
-			await openSelectedProject();
+			await openSelectedProject(targetUri);
 		} finally {
 			await refreshSidebar();
 		}
@@ -282,12 +299,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		}
 	});
 
+	registerCommand('unrealHelper.openSettings', async () => {
+		await openConfiguration('unrealHelper');
+	});
+
 	const uprojectWatcher = vscode.workspace.createFileSystemWatcher('**/*.uproject');
+	const buildFileWatcher = vscode.workspace.createFileSystemWatcher('**/*.Build.cs');
+	const targetFileWatcher = vscode.workspace.createFileSystemWatcher('**/*.Target.cs');
 	context.subscriptions.push(
 		uprojectWatcher,
+		buildFileWatcher,
+		targetFileWatcher,
 		uprojectWatcher.onDidCreate(() => void refreshSidebar()),
 		uprojectWatcher.onDidDelete(() => void refreshSidebar()),
 		uprojectWatcher.onDidChange(() => void refreshSidebar()),
+		buildFileWatcher.onDidCreate(() => void refreshSidebar()),
+		buildFileWatcher.onDidDelete(() => void refreshSidebar()),
+		buildFileWatcher.onDidChange(() => void refreshSidebar()),
+		targetFileWatcher.onDidCreate(() => void refreshSidebar()),
+		targetFileWatcher.onDidDelete(() => void refreshSidebar()),
+		targetFileWatcher.onDidChange(() => void refreshSidebar()),
 		vscode.workspace.onDidChangeConfiguration((event) => {
 			if (event.affectsConfiguration('unrealHelper')) {
 				void refreshSidebar();
@@ -300,3 +331,54 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export function deactivate(): void {}
+
+function toProjectSummaryLines(parsedProject: ParsedProjectSummary): string[] {
+	if (parsedProject.message) {
+		return [parsedProject.message];
+	}
+
+	if (!parsedProject.uproject) {
+		return ['No project summary available.'];
+	}
+
+	return [
+		`Name: ${parsedProject.uproject.name}`,
+		`Engine: ${parsedProject.uproject.engineAssociation ?? 'Not set'}`,
+		`Project Type: ${parsedProject.uproject.isCodeProject ? 'Code' : 'Blueprint-only'}`,
+		`Declared Modules: ${formatList(parsedProject.uproject.moduleNames)}`,
+		`Enabled Plugins: ${formatList(parsedProject.uproject.pluginNames)}`,
+		`Target Platforms: ${formatList(parsedProject.uproject.targetPlatforms)}`,
+	];
+}
+
+function toModuleSummaryLines(parsedProject: ParsedProjectSummary): string[] {
+	if (parsedProject.message) {
+		return ['No module summary available.'];
+	}
+
+	if (parsedProject.modules.length === 0) {
+		return ['No Build.cs files found under Source/.'];
+	}
+
+	return parsedProject.modules.map((moduleSummary: ModuleSummary) =>
+		`${moduleSummary.name}: public ${formatList(moduleSummary.publicDependencies)}, private ${formatList(moduleSummary.privateDependencies)}`,
+	);
+}
+
+function toTargetSummaryLines(parsedProject: ParsedProjectSummary): string[] {
+	if (parsedProject.message) {
+		return ['No target summary available.'];
+	}
+
+	if (parsedProject.targets.length === 0) {
+		return ['No Target.cs files found under Source/.'];
+	}
+
+	return parsedProject.targets.map((targetSummary: TargetSummary) =>
+		`${targetSummary.name}: type ${targetSummary.targetType ?? 'Unknown'}, build ${targetSummary.defaultBuildSettings ?? 'Unknown'}, include ${targetSummary.includeOrderVersion ?? 'Unknown'}, modules ${formatList(targetSummary.extraModuleNames)}`,
+	);
+}
+
+function formatList(values: string[]): string {
+	return values.length > 0 ? values.join(', ') : 'None';
+}

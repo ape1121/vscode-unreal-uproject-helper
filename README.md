@@ -12,6 +12,7 @@ Inside the sidebar you can:
 - Run `Open Editor`, which opens the selected `.uproject` using the OS file association
 - Pick the active `.uproject`
 - Pick the build script used by the build buttons
+- Review parsed Unreal project metadata, module dependencies, and target settings
 
 If multiple `.uproject` files exist, the extension prompts you to choose one when needed. If no `.uproject` is found, use `Pick .uproject` or set `unrealHelper.uprojectPath`.
 

@@ -14,6 +14,11 @@ export interface ProjectState {
 }
 
 export class ProjectLocator {
+	public async setSelectedUproject(uprojectPath: string): Promise<string> {
+		await updateConfigurationValue('uprojectPath', path.normalize(uprojectPath));
+		return path.normalize(uprojectPath);
+	}
+
 	public async getProjectState(): Promise<ProjectState> {
 		const configuredPath = await this.getExistingConfiguredPath();
 		const workspacePaths = await this.findWorkspaceUprojects();
@@ -107,8 +112,7 @@ export class ProjectLocator {
 			return undefined;
 		}
 
-		await updateConfigurationValue('uprojectPath', selectedPath);
-		return selectedPath;
+		return this.setSelectedUproject(selectedPath);
 	}
 
 	public async findWorkspaceUprojects(): Promise<string[]> {
@@ -151,7 +155,6 @@ export class ProjectLocator {
 			return undefined;
 		}
 
-		await updateConfigurationValue('uprojectPath', selection.uprojectPath);
-		return selection.uprojectPath;
+		return this.setSelectedUproject(selection.uprojectPath);
 	}
 }

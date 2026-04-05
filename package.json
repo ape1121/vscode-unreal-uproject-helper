@@ -1,7 +1,7 @@
 {
-  "name": "unreal-uproject",
-  "displayName": "Unreal UProject",
-  "description": "Adds build and launch commands for Unreal Engine UProject files. ",
+  "name": "unreal-helper",
+  "displayName": "Unreal Helper",
+  "description": "A simple Unreal Engine helper sidebar for building and opening .uproject files.",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.103.0"
@@ -9,15 +9,91 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "workspaceContains:**/*.uproject",
+    "onView:unrealHelper.sidebar",
+    "onCommand:unrealHelper.build",
+    "onCommand:unrealHelper.openEditor",
+    "onCommand:unrealHelper.buildAndOpen",
+    "onCommand:unrealHelper.pickUproject",
+    "onCommand:unrealHelper.pickBuildScript"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "unreal-uproject.helloWorld",
-        "title": "Hello World"
+        "command": "unrealHelper.build",
+        "title": "Build",
+        "category": "Unreal Helper"
+      },
+      {
+        "command": "unrealHelper.openEditor",
+        "title": "Open Editor",
+        "category": "Unreal Helper"
+      },
+      {
+        "command": "unrealHelper.buildAndOpen",
+        "title": "Build + Open Editor",
+        "category": "Unreal Helper"
+      },
+      {
+        "command": "unrealHelper.pickUproject",
+        "title": "Pick .uproject",
+        "category": "Unreal Helper"
+      },
+      {
+        "command": "unrealHelper.pickBuildScript",
+        "title": "Pick Build Script",
+        "category": "Unreal Helper"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Unreal Helper",
+      "properties": {
+        "unrealHelper.uprojectPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional path to the Unreal .uproject file to use."
+        },
+        "unrealHelper.buildScriptPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional path to the script or executable used for Unreal build actions."
+        },
+        "unrealHelper.buildArgs": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "description": "Arguments passed to the configured build script."
+        },
+        "unrealHelper.openAfterBuild": {
+          "type": "boolean",
+          "default": true,
+          "description": "When enabled, Open Editor runs the configured build script first and only opens the .uproject if the build succeeds."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "unrealHelper",
+          "title": "Unreal",
+          "icon": "media/unreal.svg"
+        }
+      ]
+    },
+    "views": {
+      "unrealHelper": [
+        {
+          "id": "unrealHelper.sidebar",
+          "name": "Unreal Helper",
+          "type": "webview",
+          "when": "unrealHelper.enabled"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

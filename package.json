@@ -1,6 +1,6 @@
 {
-  "name": "unreal-helper",
-  "displayName": "Unreal Helper",
+  "name": "unreal-uproject-helper",
+  "displayName": "Unreal UProject Helper",
   "description": "A simple Unreal Engine helper sidebar for building and opening .uproject files.",
   "publisher": "ape1121",
   "repository": {

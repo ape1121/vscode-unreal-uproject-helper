@@ -18,6 +18,7 @@ export interface SidebarState {
 	openAfterBuild: boolean;
 	canBuild: boolean;
 	canOpenEditor: boolean;
+	isBusy: boolean;
 }
 
 export interface SidebarActions {
@@ -37,6 +38,7 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
 		buildScriptMessage: 'No build script configured.',
 		canBuild: false,
 		canOpenEditor: false,
+		isBusy: false,
 		lastStatus: {
 			kind: 'info',
 			text: 'Ready.',
@@ -416,16 +418,16 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
 
 		<div class="panel actions">
 			<div class="primary-actions">
-				<button class="primary" data-command="build" ${this.state.canBuild ? '' : 'disabled'}>
+				<button class="primary" data-command="build" ${this.state.canBuild && !this.state.isBusy ? '' : 'disabled'}>
 					<span class="button-content">
 						${icon('build')}
-						<span class="button-text">Build</span>
+						<span class="button-text">${this.state.isBusy ? 'Working…' : 'Build'}</span>
 					</span>
 				</button>
-				<button class="primary" data-command="openEditor" ${this.state.canOpenEditor ? '' : 'disabled'}>
+				<button class="primary" data-command="openEditor" ${this.state.canOpenEditor && !this.state.isBusy ? '' : 'disabled'}>
 					<span class="button-content">
 						${icon('play')}
-						<span class="button-text">Open Editor</span>
+						<span class="button-text">${this.state.isBusy ? 'Working…' : 'Open Editor'}</span>
 					</span>
 				</button>
 			</div>
@@ -459,10 +461,17 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
 
 	<script nonce="${nonce}">
 		const vscode = acquireVsCodeApi();
+		const primaryButtons = document.querySelectorAll('button.primary[data-command]');
 		for (const button of document.querySelectorAll('button[data-command]')) {
 			button.addEventListener('click', () => {
 				if (button.disabled) {
 					return;
+				}
+
+				if (button.classList.contains('primary')) {
+					for (const primary of primaryButtons) {
+						primary.disabled = true;
+					}
 				}
 
 				vscode.postMessage({ command: button.dataset.command });

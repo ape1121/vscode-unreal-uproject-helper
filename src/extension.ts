@@ -44,6 +44,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		kind: 'info' as SidebarStatusKind,
 		text: 'Ready.',
 	};
+	let isBusy = false;
 
 	const setStatus = (
 		kind: SidebarStatusKind,
@@ -109,8 +110,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 			buildScriptMessage: buildScriptState.path
 				? buildScriptState.path
 				: buildScriptState.message,
-			canBuild: true,
-			canOpenEditor: projectState.workspaceHasProjects || Boolean(projectState.selectedPath),
+			canBuild: !isBusy,
+			canOpenEditor: !isBusy && (projectState.workspaceHasProjects || Boolean(projectState.selectedPath)),
+			isBusy: isBusy,
 			lastStatus: lastStatus,
 			moduleSummaryLines: toModuleSummaryLines(parsedProject),
 			openAfterBuild: config.openAfterBuild,
@@ -229,38 +231,52 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 		context.subscriptions.push(vscode.commands.registerCommand(command, callback));
 	};
 
-	registerCommand('unrealHelper.build', async (targetUri?: vscode.Uri) => {
+	const withBusyGuard = async (work: () => Promise<void>): Promise<void> => {
+		if (isBusy) {
+			return;
+		}
+
+		isBusy = true;
+		await refreshSidebar();
 		try {
-			await runBuild(targetUri);
+			await work();
 		} finally {
+			isBusy = false;
 			await refreshSidebar();
 		}
+	};
+
+	registerCommand('unrealHelper.build', async (targetUri?: vscode.Uri) => {
+		await withBusyGuard(async () => {
+			await runBuild(targetUri);
+		});
 	});
 
 	registerCommand('unrealHelper.buildAndOpen', async (targetUri?: vscode.Uri) => {
-		try {
+		await withBusyGuard(async () => {
 			const built = await runBuild(targetUri);
 			if (!built) {
 				return;
 			}
 
 			await openSelectedProject(targetUri);
-		} finally {
-			await refreshSidebar();
-		}
+		});
 	});
 
 	registerCommand('unrealHelper.openEditor', async (targetUri?: vscode.Uri) => {
-		try {
+		await withBusyGuard(async () => {
 			if (getExtensionConfig().openAfterBuild) {
-				await vscode.commands.executeCommand('unrealHelper.buildAndOpen', targetUri);
+				const built = await runBuild(targetUri);
+				if (!built) {
+					return;
+				}
+
+				await openSelectedProject(targetUri);
 				return;
 			}
 
 			await openSelectedProject(targetUri);
-		} finally {
-			await refreshSidebar();
-		}
+		});
 	});
 
 	registerCommand('unrealHelper.pickUproject', async () => {
